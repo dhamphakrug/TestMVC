@@ -1,0 +1,137 @@
+﻿@{
+    ViewData["Title"] = "Map Page";
+}
+
+<div class="container mb-3 mt-3">
+    <div class="row">
+        <div class="col-12">
+
+
+            <h1 class="lead p-4">COVID-19 Countries Map</h1>
+            <div class="row">
+                <div class="col-3"><div class="form-group"><label><span class="align-top dot-danger"></span> Red list</label>  </div></div>
+                <div class="col-3"><div class="form-group"><label><span class="align-top dot-warning"></span> Amber list</label></div></div>
+                <div class="col-3"><div class="form-group"><label><span class="align-top dot-success"></span> Green list</label></div></div>
+                <div class="col-3"><div class="form-group"><label><span class="align-top dot-dark"></span> No data</label>   </div></div>
+            </div>
+        </div>        
+    </div>
+
+</div>
+<div id="newmap" style="height:600px"></div>
+
+
+
+
+<script type="text/javascript">
+    window.onload = function () {
+      
+        fetch('https://coronavirus-19-api.herokuapp.com/countries/')
+            .then(responseCountryDetail => {
+                return responseCountryDetail.json();
+            })
+            .then(detailData => {
+                fetch('https://restcountries.eu/rest/v2/all')
+                    .then(response => response.json())
+                    .then(data => {
+                        
+                        var countryFlags = data;
+                        var countryData = detailData;
+                        var map = L.map('newmap', {
+                            center: [51.505, -0.09],
+                            zoom: 4
+                        });
+
+                        map.createPane('labels');
+                        // This pane is above markers but below popups
+                        map.getPane('labels').style.zIndex = 650;
+                        // Layers in this pane are non-interactive and do not obscure mouse/touch events
+                        map.getPane('labels').style.pointerEvents = 'none';
+                                               
+                        L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw', {
+                            maxZoom: 10,
+                            minZoom: 2,
+                            attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
+                                'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+                            id: 'mapbox/streets-v11',
+                            tileSize: 512,
+                            zoomOffset: -1
+                        }).addTo(map);
+                       
+                        geojson = L.geoJson(world, {
+                            style: function (feature) {
+                                var countryDetail = countryData.find(T => T.country.toUpperCase() == feature.properties.name.toUpperCase() || T.country.toUpperCase() == feature.id.toUpperCase());
+                                //The Api contains the country
+                                if (countryDetail != null) {
+
+                                    var CovidIndex = CalculateColorList(countryDetail.cases, countryDetail.active, countryDetail.deaths, countryDetail.recovered);
+                                    if (CovidIndex >= 20) {
+                                        return { color: '#dc3545' };
+                                    }
+                                    else if (CovidIndex < 20 && CovidIndex >= 10) {
+                                        return { color: '#ffc107' };
+                                    }
+                                    else {
+                                        return { color: '#28a745' };
+                                    }
+                                    
+                                }
+                                //API does not contain the country
+                                else {
+                                    return { color: '#343a40' };
+                                }
+                            }
+                        }).bindPopup(function (layer) {
+                            var countryDetail = countryData.find(T => T.country.toUpperCase() == layer.feature.properties.name.toUpperCase() || T.country.toUpperCase() == layer.feature.id.toUpperCase());
+                            var flag = countryFlags.find(T => T.name.toUpperCase() == countryDetail.country.toUpperCase() || T.alpha3Code.toUpperCase() == layer.feature.id.toUpperCase());
+                            if (countryDetail != null) {
+                                return AddMarkers(countryDetail.country, countryDetail, flag.flag);
+                            }
+                            else {
+                                return AddEmptyMarkers(countryDetail.country, flag.flag);
+                            }
+                        }).addTo(map);                                                                          
+                    });
+            }).catch(error => {
+                console.error(error);
+            });            
+    }
+    function CalculateColorList(totalCases, activeCases, totalDeaths, recoveredCases)
+    {
+        var result = (recoveredCases - activeCases) * (totalCases - totalDeaths);
+        var CI = Math.log(result);
+        return CI;
+    }
+
+
+    function AddMarkers(name, countryData, flag) {
+
+
+        return '<div class="row">' +
+            '<div class="col-7"><strong> ' + name + '</strong ></div> <div class="col-5"><img width="40" class="img-fluid" src="' + flag + '"></div> </div><hr/> ' +
+            '<strong>Today Cases:</strong> ' + parseFloat(countryData.todayCases).toLocaleString('en-US') + '<br>' +
+            '<strong>Cases:</strong> ' + parseFloat(countryData.cases).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-danger">Today Deaths:</strong> ' + parseFloat(countryData.todayDeaths).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-danger">Deaths:</strong> ' + parseFloat(countryData.deaths).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-success">Recovered:</strong> ' + parseFloat(countryData.recovered).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-primary">Active:</strong> ' + parseFloat(countryData.active).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-warning">Critical:</strong> ' + parseFloat(countryData.critical).toLocaleString('en-US') + '<br>' +
+            '<strong class="text-info">Total Tests:</strong> ' + parseFloat(countryData.totalTests).toLocaleString('en-US') + '<br>';
+        /*'<strong class="text-dark">Porcent of death:</strong> ' + porcent + '%<br/>'.toLocaleString('en-US') + '<br>';*/
+
+
+
+
+    }
+
+
+    function AddEmptyMarkers(name, flag) {
+
+        return '<div class="row">' +
+            '<div class="col-7"><strong> ' + name + '</strong ></div> <div class="col-5"><img width="40" class="img-fluid" src="' + flag + '"></div> </div><hr/> ' +
+            '<div class="alert alert-warning" role="alert">No data available</div>';
+
+
+
+    }
+</script>
